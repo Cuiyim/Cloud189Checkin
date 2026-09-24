@@ -1,26 +1,45 @@
 name: Cloud check in action
+
 on:
   push:
     branches:
       - main
   watch:
-    types: started
+    types: [started]
   workflow_dispatch:
   schedule:
-    - cron: 0 3 * * *
+    # cron 一律用 UTC。0 3 * * * = 每天 UTC 03:00 = 北京时间 11:00
+    # 部署后请到 Actions 页确认 Scheduled 触发时间是否真的落在这个点上
+    - cron: '0 3 * * *'
+
+# 【新增·关键】不声明的话，新仓库默认 GITHUB_TOKEN 只读：
+#   - Keep Running 步骤的 git push 会 403
+#   - Mattraks/delete-workflow-runs 删 run 会失败
+permissions:
+  contents: write
+  actions: write
+
+# 【新增】串行化。定时和 push 可能并发，两个 Keep Running 同时 push 会 non-fast-forward
+concurrency:
+  group: cloud-checkin
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # 保留：环境级 secrets 依赖它（toJSON(secrets) 需要 job 挂在该 environment 上）
+    # 但【务必】不要在此 environment 上开 Required reviewers —— 定时任务没人点批准，会永久卡在 Action required
     environment: user
     steps:
       - name: 🔀 random delay 0-300 seconds
         run: sleep $((RANDOM % 301))
 
       - name: 🔌 Check out code
-        uses: actions/checkout@main
+        # 原为 actions/checkout@main，改成固定大版本，避免上游 breaking change 直接打断
+        uses: actions/checkout@v4
 
       - name: 🔨 Setup Node.js environment
-        uses: actions/setup-node@main
+        uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: npm
@@ -29,7 +48,7 @@ jobs:
         if: vars.debug == '1'
         run: |
           echo "CLOUD189_VERBOSE=1" >> $GITHUB_ENV
-      
+
       - name: 📹 Restore cached Cookie
         id: cache-cookie-restore
         uses: actions/cache/restore@v4
@@ -69,6 +88,8 @@ jobs:
           path: .token
           key: cloud189-token-${{ env.TOKEN_HASH }}
 
+      # 空提交保活：仅用于给仓库制造"活动"，防 GitHub 因长期无提交而停掉 schedule
+      # 依赖上面的 permissions: contents: write
       - name: 🚗 Keep Running
         if: github.event_name == 'schedule'
         run: |
