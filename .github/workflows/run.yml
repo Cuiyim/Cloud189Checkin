@@ -10,7 +10,7 @@ on:
   schedule:
     # cron 一律用 UTC。0 3 * * * = 每天 UTC 03:00 = 北京时间 11:00
     # 部署后请到 Actions 页确认 Scheduled 触发时间是否真的落在这个点上
-    - cron: '0 3 * * *'
+    - cron: '0 18 * * *'
 
 # 【新增·关键】不声明的话，新仓库默认 GITHUB_TOKEN 只读：
 #   - Keep Running 步骤的 git push 会 403
